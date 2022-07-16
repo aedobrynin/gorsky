@@ -6,7 +6,6 @@ package cmd
 
 import (
 	"os"
-    "fmt"
 
     "github.com/aedobrynin/gorsky/util"
 	"github.com/spf13/cobra"
@@ -29,8 +28,7 @@ var rootCmd = &cobra.Command{
     gorsky image.png --outdir processed_images`,
     DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-        fmt.Println("root called")
-        util.JustWorks()
+        util.ProcessImages(args, outDir)
     },
 }
 
