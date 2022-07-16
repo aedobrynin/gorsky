@@ -4,6 +4,7 @@ import (
     "fmt"
     "os"
     "sync"
+    "errors"
 )
 
 func ProcessImages(paths []string, resultDirPath string) {
@@ -13,25 +14,33 @@ func ProcessImages(paths []string, resultDirPath string) {
     wg.Add(len(paths))
     for _, path := range paths {
         go func(p string) {
-            ProcessImage(p, resultDirPath)
+            processImage(p, resultDirPath)
             wg.Done()
         }(path)
     }
     wg.Wait()
+
     fmt.Println("Job is done")
 }
 
-func ProcessImage(path string, resultDirPath string) {
-    fmt.Printf("Working on %s\n", path)
+func processImage(path string, resultDirPath string) {
+    exists, err := fileExists(path)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error processing file %s: %s\n", path, err.Error())
+        return
+    } else if !exists {
+        fmt.Fprintf(os.Stderr, "Error processing file %v: file does not exist\n", path)
+        return
+    }
+    fmt.Printf("Ok %s\n", path)
 }
 
-func FileExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
+func fileExists(path string) (bool, error) {
+    if info, err := os.Stat(path); err == nil {
+        return !info.IsDir(), nil
+    } else if errors.Is(err, os.ErrNotExist) {
+        return false, nil
+    } else {
+        return false, err
+    }
 }
