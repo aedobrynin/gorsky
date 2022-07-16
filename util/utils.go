@@ -1,6 +1,10 @@
 package util
 
 import (
+    "image"
+    _ "image/jpeg"
+    _ "image/png"
+    _ "golang.org/x/image/tiff"
 	"errors"
 	"fmt"
 	"os"
@@ -10,8 +14,6 @@ import (
 )
 
 func ProcessImages(paths []string, resultDirPath string) error {
-	fmt.Println("Paths:", paths, "; resultDirPath:", resultDirPath)
-
 	resultDirAbsPath, err := createDir(resultDirPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error while creating result directory %v: %v\n", resultDirPath, err)
@@ -49,8 +51,19 @@ func processImage(path string, resultDirPath string) error {
 	if !exists {
 		return os.ErrNotExist
 	}
-	fmt.Printf("Ok %v\n", path)
-	return nil
+
+    //filename := filepath.Base(path)
+    //resultPath := filepath.Join(resultDirPath, filename)
+
+    file, err := os.Open(path)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    _, _, err = image.Decode(file)
+    fmt.Printf("Ok %v, %v\n", path, err)
+    return nil
 }
 
 func createDir(path string) (string, error) {

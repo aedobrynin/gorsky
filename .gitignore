@@ -17,3 +17,11 @@ gorsky
 
 # Go workspace file
 go.work
+
+# Vim files
+*.swp
+
+# Test images
+*.jpg
+*.png
+*.tif

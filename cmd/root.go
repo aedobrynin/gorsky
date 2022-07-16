@@ -19,7 +19,8 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "gorsky <path_to_negative>",
 	Short: "The program makes colored photo from S.M. Prokudin-Gorsky's negatives.",
-	Long: "The program makes colored photo from S.M. Prokudin-Gorsky's negatives.",
+	Long: `The program makes colored photo from S.M. Prokudin-Gorsky's negatives.
+    It supports .jpeg, .png and .tiff image formats.`,
     CompletionOptions: cobra.CompletionOptions{
         DisableDefaultCmd: true,
     },
