@@ -1,13 +1,13 @@
 package util
 
 import (
-    "image"
-    _ "image/jpeg"
-    "image/png"
-    _ "golang.org/x/image/tiff"
-    "golang.org/x/image/draw"
-    "errors"
+	"errors"
 	"fmt"
+	"golang.org/x/image/draw"
+	_ "golang.org/x/image/tiff"
+	"image"
+	_ "image/jpeg"
+	"image/png"
 	"os"
 	"path/filepath"
 	"sync"
@@ -53,23 +53,23 @@ func processImage(path string, resultDirPath string) error {
 		return os.ErrNotExist
 	}
 
-    //filename := filepath.Base(path)
-    //resultPath := filepath.Join(resultDirPath, filename)
+	//filename := filepath.Base(path)
+	//resultPath := filepath.Join(resultDirPath, filename)
 
-    file, err := os.Open(path)
-    if err != nil {
-        return err
-    }
-    defer file.Close()
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-    imgData, _, err := image.Decode(file)
-    if err != nil {
-        return err
-    }
-    splitIntoLayers(&imgData)
-    //redLayer, greenLayer, blueLayer := splitIntoLayers(&imgData)
-    //fmt.Printf("Ok %v, %v\n", path, err, redLayer, greenLayer, blueLayer)
-    return nil
+	imgData, _, err := image.Decode(file)
+	if err != nil {
+		return err
+	}
+	splitIntoLayers(&imgData)
+	//redLayer, greenLayer, blueLayer := splitIntoLayers(&imgData)
+	//fmt.Printf("Ok %v, %v\n", path, err, redLayer, greenLayer, blueLayer)
+	return nil
 }
 
 func createDir(path string) (string, error) {
@@ -92,26 +92,35 @@ func fileExists(path string) (bool, error) {
 }
 
 func splitIntoLayers(img *image.Image) (*image.RGBA64, *image.RGBA64, *image.RGBA64) {
-    bounds := (*img).Bounds()
-    width, height := bounds.Dx(), bounds.Dy()
+	bounds := (*img).Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
 
-    b := image.NewRGBA64(image.Rect(0, 0, width, height / 3))
-    draw.Copy(b, image.Pt(0, 0), *img, image.Rect(0, 0, width, height / 3), draw.Over, nil)
-    b_out, _ := os.Create("b.png")
-    defer b_out.Close()
-    png.Encode(b_out, b)
+	const cutWidthCoeff float64 = 0.05
+	cutWidth := int(float64(width) * cutWidthCoeff)
 
-    g := image.NewRGBA64(image.Rect(0, 0, width, height / 3))
-    draw.Copy(g, image.Pt(0, 0), *img, image.Rect(0, height / 3, width, height / 3 * 2), draw.Over, nil)
-    g_out, _ := os.Create("g.png")
-    defer g_out.Close()
-    png.Encode(g_out, g)
+	const cutHeightCoeff float64 = 0.03
+	cutHeight := int(float64(height / 3) * cutHeightCoeff)
 
-    r := image.NewRGBA64(image.Rect(0, 0, width, height / 3))
-    draw.Copy(r, image.Pt(0, 0), *img, image.Rect(0, height / 3 * 2, width, height), draw.Over, nil)
-    r_out, _ := os.Create("r.png")
-    defer r_out.Close()
-    png.Encode(r_out, r)
+	b := image.NewRGBA64(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
+    bCopyRect := image.Rect(cutWidth, cutHeight, width - cutWidth, height / 3 - cutHeight)
+	draw.Copy(b, image.Pt(0, 0), *img, bCopyRect, draw.Over, nil)
+	b_out, _ := os.Create("b.png")
+	defer b_out.Close()
+	png.Encode(b_out, b)
 
-    return r, g, b
+	g := image.NewRGBA64(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
+    gCopyRect := image.Rect(cutWidth, height / 3 + cutHeight, width - cutWidth, height / 3 * 2 - cutHeight)
+	draw.Copy(g, image.Pt(0, 0), *img, gCopyRect, draw.Over, nil)
+	g_out, _ := os.Create("g.png")
+	defer g_out.Close()
+	png.Encode(g_out, g)
+
+	r := image.NewRGBA64(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
+    rCopyRect := image.Rect(cutWidth, height / 3 * 2 + cutHeight, width - cutWidth, height - cutHeight)
+	draw.Copy(r, image.Pt(0, 0), *img, rCopyRect, draw.Over, nil)
+	r_out, _ := os.Create("r.png")
+	defer r_out.Close()
+	png.Encode(r_out, r)
+
+	return r, g, b
 }
