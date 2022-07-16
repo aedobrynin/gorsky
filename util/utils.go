@@ -3,11 +3,12 @@ package util
 import (
 	"errors"
 	"fmt"
-	"golang.org/x/image/draw"
-	_ "golang.org/x/image/tiff"
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
+	"image/jpeg"
+	"image/png"
+    "image/color"
+    "golang.org/x/image/draw"
+	"golang.org/x/image/tiff"
 	"os"
 	"path/filepath"
 	"sync"
@@ -32,6 +33,7 @@ func ProcessImages(paths []string, resultDirPath string) error {
 				fmt.Fprintf(os.Stderr, "Error processing file %v: %v\n", p, err)
 			} else {
 				atomic.AddUint64(&okExecutions, 1)
+                fmt.Printf("%v/%v: Successfuly processed %v\n", atomic.LoadUint64(&okExecutions), len(paths), p)
 			}
 		}(path)
 	}
@@ -53,23 +55,44 @@ func processImage(path string, resultDirPath string) error {
 		return os.ErrNotExist
 	}
 
-	//filename := filepath.Base(path)
-	//resultPath := filepath.Join(resultDirPath, filename)
-
-	file, err := os.Open(path)
+	inFile, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer inFile.Close()
 
-	imgData, _, err := image.Decode(file)
+	imgData, imgType, err := image.Decode(inFile)
 	if err != nil {
 		return err
 	}
-	splitIntoLayers(&imgData)
-	//redLayer, greenLayer, blueLayer := splitIntoLayers(&imgData)
-	//fmt.Printf("Ok %v, %v\n", path, err, redLayer, greenLayer, blueLayer)
-	return nil
+	r, g, b := splitIntoLayers(&imgData)
+
+    result, err := stackLayers(r, g, b)
+    if err != nil {
+        return err
+    }
+
+    filename := filepath.Base(path)
+	resultPath := filepath.Join(resultDirPath, filename)
+    outFile, err := os.Create(resultPath)
+    if err != nil {
+        return err
+    }
+    defer outFile.Close()
+
+    switch imgType {
+    case "jpeg":
+        err = jpeg.Encode(outFile, result, nil)
+    case "png":
+        err = png.Encode(outFile, result)
+    case "tiff":
+        err = tiff.Encode(outFile, result, nil)
+    }
+    if err != nil {
+        return err
+    }
+
+    return nil
 }
 
 func createDir(path string) (string, error) {
@@ -77,7 +100,7 @@ func createDir(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	err = os.MkdirAll(absPath, 0666)
+	err = os.MkdirAll(absPath, 0777)
 	return absPath, err
 }
 
@@ -128,4 +151,22 @@ func splitIntoLayers(img *image.Image) (*image.RGBA64, *image.RGBA64, *image.RGB
     wg.Wait()
 
     return r, g, b
+}
+
+func stackLayers(r, g, b *image.RGBA64) (*image.RGBA64, error) {
+    if (*r).Bounds() != (*g).Bounds() || (*r).Bounds() != (*b).Bounds() || (*g).Bounds() != (*b).Bounds() {
+        return nil, errors.New("Layer sizes do not match")
+    }
+
+    result := image.NewRGBA64((*r).Bounds())
+    width, height := result.Bounds().Dy(), result.Bounds().Dx()
+    for i := 0; i < height; i++ {
+        for j := 0; j < width; j++ {
+            rC, _, _, _ := (*r).At(i, j).RGBA()
+            _, gC, _, _ := (*g).At(i, j).RGBA()
+            _, _, bC, _ := (*b).At(i, j).RGBA()
+            result.Set(i, j, color.RGBA{R: uint8(rC), G: uint8(gC), B: uint8(bC), A: 255})
+        }
+    }
+    return result, nil
 }
