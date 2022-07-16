@@ -3,9 +3,10 @@ package util
 import (
     "image"
     _ "image/jpeg"
-    _ "image/png"
+    "image/png"
     _ "golang.org/x/image/tiff"
-	"errors"
+    "golang.org/x/image/draw"
+    "errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,8 +62,13 @@ func processImage(path string, resultDirPath string) error {
     }
     defer file.Close()
 
-    _, _, err = image.Decode(file)
-    fmt.Printf("Ok %v, %v\n", path, err)
+    imgData, _, err := image.Decode(file)
+    if err != nil {
+        return err
+    }
+    splitIntoLayers(&imgData)
+    //redLayer, greenLayer, blueLayer := splitIntoLayers(&imgData)
+    //fmt.Printf("Ok %v, %v\n", path, err, redLayer, greenLayer, blueLayer)
     return nil
 }
 
@@ -83,4 +89,29 @@ func fileExists(path string) (bool, error) {
 	} else {
 		return false, err
 	}
+}
+
+func splitIntoLayers(img *image.Image) (*image.RGBA64, *image.RGBA64, *image.RGBA64) {
+    bounds := (*img).Bounds()
+    width, height := bounds.Dx(), bounds.Dy()
+
+    b := image.NewRGBA64(image.Rect(0, 0, width, height / 3))
+    draw.Copy(b, image.Pt(0, 0), *img, image.Rect(0, 0, width, height / 3), draw.Over, nil)
+    b_out, _ := os.Create("b.png")
+    defer b_out.Close()
+    png.Encode(b_out, b)
+
+    g := image.NewRGBA64(image.Rect(0, 0, width, height / 3))
+    draw.Copy(g, image.Pt(0, 0), *img, image.Rect(0, height / 3, width, height / 3 * 2), draw.Over, nil)
+    g_out, _ := os.Create("g.png")
+    defer g_out.Close()
+    png.Encode(g_out, g)
+
+    r := image.NewRGBA64(image.Rect(0, 0, width, height / 3))
+    draw.Copy(r, image.Pt(0, 0), *img, image.Rect(0, height / 3 * 2, width, height), draw.Over, nil)
+    r_out, _ := os.Create("r.png")
+    defer r_out.Close()
+    png.Encode(r_out, r)
+
+    return r, g, b
 }
