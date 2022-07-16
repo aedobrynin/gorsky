@@ -7,7 +7,7 @@ import (
 	_ "golang.org/x/image/tiff"
 	"image"
 	_ "image/jpeg"
-	"image/png"
+	_ "image/png"
 	"os"
 	"path/filepath"
 	"sync"
@@ -101,26 +101,31 @@ func splitIntoLayers(img *image.Image) (*image.RGBA64, *image.RGBA64, *image.RGB
 	const cutHeightCoeff float64 = 0.03
 	cutHeight := int(float64(height / 3) * cutHeightCoeff)
 
+    wg := new(sync.WaitGroup)
+    wg.Add(3)
+
 	b := image.NewRGBA64(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
     bCopyRect := image.Rect(cutWidth, cutHeight, width - cutWidth, height / 3 - cutHeight)
-	draw.Copy(b, image.Pt(0, 0), *img, bCopyRect, draw.Over, nil)
-	b_out, _ := os.Create("b.png")
-	defer b_out.Close()
-	png.Encode(b_out, b)
+    go func() {
+        draw.Copy(b, image.Pt(0, 0), *img, bCopyRect, draw.Over, nil)
+        wg.Done()
+    }()
 
-	g := image.NewRGBA64(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
+    g := image.NewRGBA64(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
     gCopyRect := image.Rect(cutWidth, height / 3 + cutHeight, width - cutWidth, height / 3 * 2 - cutHeight)
-	draw.Copy(g, image.Pt(0, 0), *img, gCopyRect, draw.Over, nil)
-	g_out, _ := os.Create("g.png")
-	defer g_out.Close()
-	png.Encode(g_out, g)
+	go func() {
+        draw.Copy(g, image.Pt(0, 0), *img, gCopyRect, draw.Over, nil)
+        wg.Done()
+    }()
 
 	r := image.NewRGBA64(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
     rCopyRect := image.Rect(cutWidth, height / 3 * 2 + cutHeight, width - cutWidth, height - cutHeight)
-	draw.Copy(r, image.Pt(0, 0), *img, rCopyRect, draw.Over, nil)
-	r_out, _ := os.Create("r.png")
-	defer r_out.Close()
-	png.Encode(r_out, r)
+	go func() {
+        draw.Copy(r, image.Pt(0, 0), *img, rCopyRect, draw.Over, nil)
+        wg.Done()
+    }()
 
-	return r, g, b
+    wg.Wait()
+
+    return r, g, b
 }
