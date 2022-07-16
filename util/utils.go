@@ -159,9 +159,9 @@ func stackLayers(r, g, b *image.RGBA64) (*image.RGBA64, error) {
     }
 
     result := image.NewRGBA64((*r).Bounds())
-    width, height := result.Bounds().Dy(), result.Bounds().Dx()
-    for i := 0; i < height; i++ {
-        for j := 0; j < width; j++ {
+    width, height := result.Bounds().Dx(), result.Bounds().Dy()
+    for i := 0; i < width; i++ {
+        for j := 0; j < height; j++ {
             rC, _, _, _ := (*r).At(i, j).RGBA()
             _, gC, _, _ := (*g).At(i, j).RGBA()
             _, _, bC, _ := (*b).At(i, j).RGBA()
@@ -170,3 +170,4 @@ func stackLayers(r, g, b *image.RGBA64) (*image.RGBA64, error) {
     }
     return result, nil
 }
+
