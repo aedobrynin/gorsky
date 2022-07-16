@@ -27,8 +27,10 @@ var rootCmd = &cobra.Command{
     Example: `gorsky image.tif
     gorsky image.png --outdir processed_images`,
     DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
-        util.ProcessImages(args, outDir)
+    SilenceUsage: true,
+    RunE: func(cmd *cobra.Command, args []string) error {
+        err := util.ProcessImages(args, outDir)
+        return err
     },
 }
 

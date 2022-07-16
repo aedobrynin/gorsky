@@ -1,46 +1,73 @@
 package util
 
 import (
-    "fmt"
-    "os"
-    "sync"
-    "errors"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
 )
 
-func ProcessImages(paths []string, resultDirPath string) {
-    fmt.Println("Paths:", paths, "; resultDirPath:", resultDirPath)
+func ProcessImages(paths []string, resultDirPath string) error {
+	fmt.Println("Paths:", paths, "; resultDirPath:", resultDirPath)
 
-    wg := new(sync.WaitGroup)
-    wg.Add(len(paths))
-    for _, path := range paths {
-        go func(p string) {
-            processImage(p, resultDirPath)
-            wg.Done()
-        }(path)
-    }
-    wg.Wait()
+	resultDirAbsPath, err := createDir(resultDirPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error while creating result directory %v: %v\n", resultDirPath, err)
+		return errors.New("Some files weren't processed, check stderr for more information")
+	}
 
-    fmt.Println("Job is done")
+	var okExecutions uint64
+
+	wg := new(sync.WaitGroup)
+	wg.Add(len(paths))
+	for _, path := range paths {
+		go func(p string) {
+			defer wg.Done()
+			if err := processImage(p, resultDirAbsPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Error processing file %v: %v\n", p, err)
+			} else {
+				atomic.AddUint64(&okExecutions, 1)
+			}
+		}(path)
+	}
+	wg.Wait()
+
+	fmt.Println("Job is done")
+	if okExecutions == uint64(len(paths)) {
+		return nil
+	}
+	return errors.New("Some files weren't processed, check stderr for more information")
 }
 
-func processImage(path string, resultDirPath string) {
-    exists, err := fileExists(path)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Error processing file %s: %s\n", path, err.Error())
-        return
-    } else if !exists {
-        fmt.Fprintf(os.Stderr, "Error processing file %v: file does not exist\n", path)
-        return
-    }
-    fmt.Printf("Ok %s\n", path)
+func processImage(path string, resultDirPath string) error {
+	exists, err := fileExists(path)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return os.ErrNotExist
+	}
+	fmt.Printf("Ok %v\n", path)
+	return nil
+}
+
+func createDir(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	err = os.MkdirAll(absPath, 0666)
+	return absPath, err
 }
 
 func fileExists(path string) (bool, error) {
-    if info, err := os.Stat(path); err == nil {
-        return !info.IsDir(), nil
-    } else if errors.Is(err, os.ErrNotExist) {
-        return false, nil
-    } else {
-        return false, err
-    }
+	if info, err := os.Stat(path); err == nil {
+		return !info.IsDir(), nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else {
+		return false, err
+	}
 }
