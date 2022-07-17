@@ -74,6 +74,12 @@ func processImage(path string, resultDirPath string) error {
 
     r, g, b := splitIntoLayers(&imgData)
 
+    gXShift, gYShift := getBestShift(r, g)
+    fmt.Println(gXShift, gYShift)
+
+    bXShift, bYShift := getBestShift(r, b)
+    fmt.Println(bXShift, bYShift)
+
     result, err := stackLayers(r, g, b)
     if err != nil {
         return err
@@ -176,3 +182,34 @@ func stackLayers(r, g, b *image.Gray16) (*image.RGBA64, error) {
     return result, nil
 }
 
+func getBestShift(stay, shift *image.Gray16) (int, int) {
+    var bestCorrel int64 = 0
+    var bestXShift, bestYShift int
+
+    width, height := stay.Bounds().Dx(), stay.Bounds().Dy()
+
+    for x_shift := -100; x_shift <= 100; x_shift++ {
+        for y_shift := -100; y_shift <= 100; y_shift++ {
+            var curCorrel int64 = 0
+            for i := Max(-x_shift, 0); i + x_shift < width; i++ {
+                for j := Max(-y_shift, 0); j + y_shift < height; j++ {
+                    a := stay.Gray16At(i, j).Y
+                    b := shift.Gray16At(i + x_shift, j + y_shift).Y
+                    curCorrel += int64(a) * int64(b)
+                }
+            }
+            if curCorrel > bestCorrel {
+                bestCorrel = curCorrel
+                bestXShift, bestYShift = x_shift, y_shift
+            }
+        }
+    }
+    return bestXShift, bestYShift
+}
+
+func Max(a, b int) int {
+    if a > b {
+        return a
+    }
+    return b
+}
