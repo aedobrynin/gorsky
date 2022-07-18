@@ -216,7 +216,7 @@ func stackLayersWithShifts(r *image.Gray16, rXShift, rYShift int,
     return result
 }
 
-func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) (int, int) {
+func getBestShift(stay, shift image.Gray16, xSearchRange, ySearchRange [2]int) (int, int) {
     var bestCorrel int64 = 0
     var bestXShift, bestYShift int
 
@@ -265,7 +265,7 @@ func getBestShiftByPyramidSearch(stay, shift []*image.Gray16) (int, int) {
 
     var xShift, yShift int
     for i := len(stay) - 1; i >= 0; i-- {
-        xShift, yShift = getBestShift(stay[i], shift[i], xSearchRange, ySearchRange)
+        xShift, yShift = getBestShift(*stay[i], *shift[i], xSearchRange, ySearchRange)
         xSearchRange = [2]int{xShift * 2 - 2, xShift * 2 + 2}
         ySearchRange = [2]int{yShift * 2 - 2, yShift * 2 + 2}
     }

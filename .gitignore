@@ -29,3 +29,7 @@ go.work
 
 # Result folder
 result/
+
+# Profiler data
+*.prof
+*.svg
