@@ -5,7 +5,7 @@ import (
     "fmt"
     "image"
     "image/jpeg"
-     "image/png"
+    "image/png"
     "image/color"
     "golang.org/x/image/draw"
     "golang.org/x/image/tiff"
@@ -74,16 +74,25 @@ func processImage(path string, resultDirPath string) error {
 
     r, g, b := splitIntoLayers(&imgData)
 
-    gXShift, gYShift := getBestShift(r, g)
-    fmt.Println(gXShift, gYShift)
-
-    bXShift, bYShift := getBestShift(r, b)
-    fmt.Println(bXShift, bYShift)
-
-    result, err := stackLayers(r, g, b)
+    shiftGoroutine := func(stay, shift *image.Gray16) <-chan int{
+       outChan := make(chan int)
+        go func() {
+            defer close(outChan)
+            xShift, yShift := getBestShift(stay, shift)
+            outChan <- xShift
+            outChan <- yShift
+        }()
+        return outChan
+    }
+    gShiftChan := shiftGoroutine(r, g)
+    bShiftChan := shiftGoroutine(r, b)
+    gXShift, gYShift := <-gShiftChan, <-gShiftChan
+    bXShift, bYShift := <-bShiftChan, <-bShiftChan
+    result, err := stackLayersWithShifts(r, 0, 0, g, gXShift, gYShift, b, bXShift, bYShift)
     if err != nil {
         return err
     }
+
     filename := filepath.Base(path)
     resultPath := filepath.Join(resultDirPath, filename)
     outFile, err := os.Create(resultPath)
@@ -164,18 +173,26 @@ func splitIntoLayers(img *image.Image) (*image.Gray16, *image.Gray16, *image.Gra
     return r, g, b
 }
 
-func stackLayers(r, g, b *image.Gray16) (*image.RGBA64, error) {
-    if (*r).Bounds() != (*g).Bounds() || (*r).Bounds() != (*b).Bounds() || (*g).Bounds() != (*b).Bounds() {
-        return nil, errors.New("Layer sizes do not match")
-    }
+func stackLayersWithShifts(r *image.Gray16, rXShift, rYShift int,
+                           g *image.Gray16, gXShift, gYShift int,
+                           b *image.Gray16, bXShift, bYShift int) (*image.RGBA64, error) {
+    width := min(
+        r.Bounds().Dx() - abs(rXShift),
+        g.Bounds().Dx() - abs(gXShift),
+        b.Bounds().Dx() - abs(bXShift),
+    )
+    height := min(
+        r.Bounds().Dy() - abs(rYShift),
+        g.Bounds().Dy() - abs(gYShift),
+        b.Bounds().Dy() - abs(bYShift),
+    )
 
-    result := image.NewRGBA64((*r).Bounds())
-    width, height := result.Bounds().Dx(), result.Bounds().Dy()
+    result := image.NewRGBA64(image.Rect(0, 0, width, height))
     for i := 0; i < width; i++ {
         for j := 0; j < height; j++ {
-            rC := (*r).Gray16At(i, j).Y
-            gC := (*g).Gray16At(i, j).Y
-            bC := (*b).Gray16At(i, j).Y
+            rC := (*r).Gray16At(i + abs(rXShift), j + abs(rYShift)).Y
+            gC := (*g).Gray16At(i + abs(gXShift), j + abs(gYShift)).Y
+            bC := (*b).Gray16At(i + abs(bXShift), j + abs(bYShift)).Y
             result.Set(i, j, color.RGBA64{R: rC, G: gC, B: bC, A: 255})
         }
     }
@@ -188,28 +205,58 @@ func getBestShift(stay, shift *image.Gray16) (int, int) {
 
     width, height := stay.Bounds().Dx(), stay.Bounds().Dy()
 
-    for x_shift := -100; x_shift <= 100; x_shift++ {
-        for y_shift := -100; y_shift <= 100; y_shift++ {
+    for xShift := -100; xShift <= 100; xShift++ {
+        for yShift := -100; yShift <= 100; yShift++ {
             var curCorrel int64 = 0
-            for i := Max(-x_shift, 0); i + x_shift < width; i++ {
-                for j := Max(-y_shift, 0); j + y_shift < height; j++ {
+            for i := max(-xShift, 0); i + xShift < width; i++ {
+                for j := max(-yShift, 0); j + yShift < height; j++ {
                     a := stay.Gray16At(i, j).Y
-                    b := shift.Gray16At(i + x_shift, j + y_shift).Y
+                    b := shift.Gray16At(i + xShift, j + yShift).Y
                     curCorrel += int64(a) * int64(b)
                 }
             }
             if curCorrel > bestCorrel {
                 bestCorrel = curCorrel
-                bestXShift, bestYShift = x_shift, y_shift
+                bestXShift, bestYShift = xShift, yShift
             }
         }
     }
     return bestXShift, bestYShift
 }
 
-func Max(a, b int) int {
-    if a > b {
-        return a
+func max(val0 int, val ...int) int {
+    mx := val0
+    for _, v := range val {
+        if v > mx {
+            mx = v
+        }
     }
-    return b
+    return mx
+}
+
+func min(val0 int, val ...int) int {
+    mn := val0
+    for _, v := range val {
+        if v < mn {
+            mn = v
+        }
+    }
+    return mn
+}
+
+func abs(val int) int {
+    if val > 0 {
+        return val
+    }
+    return -val
+}
+
+func shiftAndCutEmpty(img *image.Gray16, xShift, yShift int) *image.Gray16 {
+    width, height := img.Bounds().Dx(), img.Bounds().Dy()
+    cropTo := image.Rect(max(0, xShift), max(0, yShift), min(width + xShift, width), min(height + yShift, height))
+    return getCropped(img, cropTo)
+}
+
+func getCropped(img *image.Gray16, r image.Rectangle) *image.Gray16 {
+    return img.SubImage(r).(*image.Gray16)
 }
