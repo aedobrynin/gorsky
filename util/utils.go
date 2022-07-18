@@ -252,7 +252,7 @@ func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
 	curWidth, curHeight := img.Bounds().Dx()/2, img.Bounds().Dy()/2
 	for min(curWidth, curHeight) > 100 {
 		layer := image.NewGray16(image.Rect(0, 0, curWidth, curHeight))
-		draw.BiLinear.Scale(layer, layer.Bounds(), img, img.Bounds(), draw.Over, nil)
+		draw.NearestNeighbor.Scale(layer, layer.Bounds(), img, img.Bounds(), draw.Over, nil)
 		pyramid = append(pyramid, layer)
 		curWidth /= 2
 		curHeight /= 2
@@ -261,8 +261,8 @@ func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
 }
 
 func getBestShiftByPyramidSearch(stay, shift []*image.Gray16) (int, int) {
-	xSearchRange := [2]int{-30, 30}
-	ySearchRange := [2]int{-30, 30}
+	xSearchRange := [2]int{-7, 7}
+	ySearchRange := [2]int{-7, 7}
 
 	var xShift, yShift int
 	for i := len(stay) - 1; i >= 0; i-- {
