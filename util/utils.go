@@ -102,13 +102,13 @@ func processImage(path string, resultDirPath string) error {
         }()
         return outChan
     }
-    gShiftChan := getBestShiftByPyramidSearchGoroutine(rPyramid, gPyramid)
-    bShiftChan := getBestShiftByPyramidSearchGoroutine(rPyramid, bPyramid)
-    gXShift, gYShift := <-gShiftChan, <-gShiftChan
+    rShiftChan := getBestShiftByPyramidSearchGoroutine(gPyramid, rPyramid)
+    bShiftChan := getBestShiftByPyramidSearchGoroutine(gPyramid, bPyramid)
+    rXShift, rYShift := <-rShiftChan, <-rShiftChan
     bXShift, bYShift := <-bShiftChan, <-bShiftChan
-    fmt.Println(gXShift, gYShift)
+    fmt.Println(rXShift, rYShift)
     fmt.Println(bXShift, bYShift)
-    result, err := stackLayersWithShifts(r, 0, 0, g, gXShift, gYShift, b, bXShift, bYShift)
+    result, err := stackLayersWithShifts(r, rXShift, rYShift, g, 0, 0, b, bXShift, bYShift)
     if err != nil {
         return err
     }
@@ -210,9 +210,9 @@ func stackLayersWithShifts(r *image.Gray16, rXShift, rYShift int,
     result := image.NewRGBA64(image.Rect(0, 0, width, height))
     for i := 0; i < width; i++ {
         for j := 0; j < height; j++ {
-            rC := (*r).Gray16At(i + abs(rXShift), j + abs(rYShift)).Y
-            gC := (*g).Gray16At(i + abs(gXShift), j + abs(gYShift)).Y
-            bC := (*b).Gray16At(i + abs(bXShift), j + abs(bYShift)).Y
+            rC := (*r).Gray16At(i + rXShift, j + rYShift).Y
+            gC := (*g).Gray16At(i + gXShift, j + gYShift).Y
+            bC := (*b).Gray16At(i + bXShift, j + bYShift).Y
             result.Set(i, j, color.RGBA64{R: rC, G: gC, B: bC, A: 255})
         }
     }
@@ -228,8 +228,8 @@ func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) 
     for xShift := xSearchRange[0]; xShift <= xSearchRange[1]; xShift++ {
         for yShift := ySearchRange[0]; yShift <= ySearchRange[1]; yShift++ {
             var curCorrel int64 = 0
-            for i := max(-xShift, 0); i + xShift < width; i++ {
-                for j := max(-yShift, 0); j + yShift < height; j++ {
+            for i := 0; i + xShift < width; i++ {
+                for j := 0; j + yShift < height; j++ {
                     a := stay.Gray16At(i, j).Y
                     b := shift.Gray16At(i + xShift, j + yShift).Y
                     curCorrel += int64(a) * int64(b)
