@@ -92,20 +92,22 @@ func processImage(path string, resultDirPath string) error {
     bPyramid := <- bPyramidChan
     fmt.Println(len(rPyramid), len(gPyramid), len(bPyramid))
 
-    getBestShiftGoroutine := func(stay, shift *image.Gray16) <-chan int{
+    getBestShiftByPyramidSearchGoroutine := func(stay, shift []*image.Gray16) <-chan int{
        outChan := make(chan int)
         go func() {
             defer close(outChan)
-            xShift, yShift := getBestShift(stay, shift)
+            xShift, yShift := getBestShiftByPyramidSearch(stay, shift)
             outChan <- xShift
             outChan <- yShift
         }()
         return outChan
     }
-    gShiftChan := getBestShiftGoroutine(r, g)
-    bShiftChan := getBestShiftGoroutine(r, b)
+    gShiftChan := getBestShiftByPyramidSearchGoroutine(rPyramid, gPyramid)
+    bShiftChan := getBestShiftByPyramidSearchGoroutine(rPyramid, bPyramid)
     gXShift, gYShift := <-gShiftChan, <-gShiftChan
     bXShift, bYShift := <-bShiftChan, <-bShiftChan
+    fmt.Println(gXShift, gYShift)
+    fmt.Println(bXShift, bYShift)
     result, err := stackLayersWithShifts(r, 0, 0, g, gXShift, gYShift, b, bXShift, bYShift)
     if err != nil {
         return err
@@ -217,14 +219,14 @@ func stackLayersWithShifts(r *image.Gray16, rXShift, rYShift int,
     return result, nil
 }
 
-func getBestShift(stay, shift *image.Gray16) (int, int) {
+func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) (int, int) {
     var bestCorrel int64 = 0
     var bestXShift, bestYShift int
 
     width, height := stay.Bounds().Dx(), stay.Bounds().Dy()
 
-    for xShift := -100; xShift <= 100; xShift++ {
-        for yShift := -100; yShift <= 100; yShift++ {
+    for xShift := xSearchRange[0]; xShift <= xSearchRange[1]; xShift++ {
+        for yShift := ySearchRange[0]; yShift <= ySearchRange[1]; yShift++ {
             var curCorrel int64 = 0
             for i := max(-xShift, 0); i + xShift < width; i++ {
                 for j := max(-yShift, 0); j + yShift < height; j++ {
@@ -254,6 +256,19 @@ func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
         cur_height /= 2
     }
     return pyramid
+}
+
+func getBestShiftByPyramidSearch(stay, shift []*image.Gray16) (int, int) {
+    xSearchRange := [2]int{-30, 30}
+    ySearchRange := [2]int{-30, 30}
+
+    var xShift, yShift int
+    for i := len(stay) - 1; i >= 0; i-- {
+        xShift, yShift = getBestShift(stay[i], shift[i], xSearchRange, ySearchRange)
+        xSearchRange = [2]int{xShift * 2 - 2, xShift * 2 + 2}
+        ySearchRange = [2]int{yShift * 2 - 2, yShift * 2 + 2}
+    }
+    return xShift, yShift
 }
 
 func max(val0 int, val ...int) int {
