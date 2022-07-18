@@ -15,7 +15,7 @@ import (
     "sync/atomic"
 )
 
-func ProcessImages(paths []string, resultDirPath string) error {
+func ProcessImages(paths []string, resultDirPath string, maxWorkers int) error {
     resultDirAbsPath, err := createDir(resultDirPath)
     if err != nil {
         fmt.Fprintf(os.Stderr, "Error while creating result directory %v: %v\n", resultDirPath, err)
@@ -24,19 +24,26 @@ func ProcessImages(paths []string, resultDirPath string) error {
 
     var okExecutions uint64
 
-    wg := new(sync.WaitGroup)
-    wg.Add(len(paths))
+    inputChan := make(chan string, len(paths))
     for _, path := range paths {
-        go func(p string) {
-            defer wg.Done()
-            if err := processImage(p, resultDirAbsPath); err != nil {
-                fmt.Fprintf(os.Stderr, "Error processing file %v: %v\n", p, err)
-            } else {
-                atomic.AddUint64(&okExecutions, 1)
-                fmt.Printf("%v/%v: Successfuly processed %v\n", atomic.LoadUint64(&okExecutions), len(paths), p)
-            }
-        }(path)
+        inputChan <- path
     }
+    wg := new(sync.WaitGroup)
+    for i := 0; i < min(maxWorkers, len(paths)); i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for path := range inputChan {
+                if err := processImage(path, resultDirAbsPath); err != nil {
+                    fmt.Fprintf(os.Stderr, "Error processing file %v: %v\n", path, err)
+                } else {
+                    atomic.AddUint64(&okExecutions, 1)
+                    fmt.Printf("%v/%v: Successfuly processed %v\n", atomic.LoadUint64(&okExecutions), len(paths), path)
+                }
+            }
+        }()
+    }
+    close(inputChan)
     wg.Wait()
 
     fmt.Println("Job is done")

@@ -15,6 +15,7 @@ import (
 var (
     // Used for flags
     outDir string
+    maxWorkers int
 )
 
 var rootCmd = &cobra.Command{
@@ -32,11 +33,12 @@ It supports .jpeg, .png and .tiff image formats.`,
         return nil
     },
     Example: `  gorsky image.tif
-  gorsky image.png --outdir processed_images`,
+  gorsky image.png --outdir processed_images
+  gorsky image1.png image2.png image3.png image4.png image5.png --maxworkers 5`,
     DisableFlagsInUseLine: true,
     SilenceUsage: true,
     RunE: func(cmd *cobra.Command, args []string) error {
-        err := util.ProcessImages(args, outDir)
+        err := util.ProcessImages(args, outDir, maxWorkers)
         return err
     },
 }
@@ -50,4 +52,5 @@ func Execute() {
 
 func init() {
     rootCmd.Flags().StringVar(&outDir, "outdir", "result", "Result images will be stored in this folder")
+    rootCmd.Flags().IntVar(&maxWorkers, "maxworkers", 4, "How many images can be processed simultaneously")
 }
