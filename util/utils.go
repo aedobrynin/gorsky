@@ -13,6 +13,8 @@ import (
     "path/filepath"
     "sync"
     "sync/atomic"
+    "math"
+    "strconv"
 )
 
 func ProcessImages(paths []string, resultDirPath string) error {
@@ -84,6 +86,9 @@ func processImage(path string, resultDirPath string) error {
         }()
         return outChan
     }
+
+    getPyramid(r, 5)
+
     gShiftChan := shiftGoroutine(r, g)
     bShiftChan := shiftGoroutine(r, b)
     gXShift, gYShift := <-gShiftChan, <-gShiftChan
@@ -224,6 +229,27 @@ func getBestShift(stay, shift *image.Gray16) (int, int) {
     return bestXShift, bestYShift
 }
 
+func getPyramid(img *image.Gray16, maxLayers int) []*image.Gray16 {
+    exactLayers := min(int(math.Log2(float64(min(img.Bounds().Dx(), img.Bounds().Dy()))) + 1), maxLayers)
+    pyramid := make([]*image.Gray16, exactLayers, exactLayers)
+    pyramid[0] = img
+
+    cur_width, cur_height := img.Bounds().Dx(), img.Bounds().Dy()
+    for i := 1; i < exactLayers; i++ {
+        cur_width /= 2
+        cur_height /= 2
+        layer := image.NewGray16(image.Rect(0, 0, cur_width, cur_height))
+        draw.BiLinear.Scale(layer, layer.Bounds(), img, img.Bounds(), draw.Over, nil)
+        pyramid[i] = layer
+    }
+    for i := 0; i < exactLayers; i++ {
+        file, _ := os.Create("result/layer" + strconv.Itoa(i) + ".png")
+        png.Encode(file, pyramid[i])
+        file.Close()
+    }
+    return pyramid
+}
+
 func max(val0 int, val ...int) int {
     mx := val0
     for _, v := range val {
@@ -249,14 +275,4 @@ func abs(val int) int {
         return val
     }
     return -val
-}
-
-func shiftAndCutEmpty(img *image.Gray16, xShift, yShift int) *image.Gray16 {
-    width, height := img.Bounds().Dx(), img.Bounds().Dy()
-    cropTo := image.Rect(max(0, xShift), max(0, yShift), min(width + xShift, width), min(height + yShift, height))
-    return getCropped(img, cropTo)
-}
-
-func getCropped(img *image.Gray16, r image.Rectangle) *image.Gray16 {
-    return img.SubImage(r).(*image.Gray16)
 }
