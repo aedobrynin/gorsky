@@ -241,13 +241,13 @@ func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) 
 func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
     pyramid := []*image.Gray16{img} // TODO: calculate layers count using log2
 
-    cur_width, cur_height := img.Bounds().Dx() / 2, img.Bounds().Dy() / 2
-    for min(cur_width, cur_height) > 100 {
-        layer := image.NewGray16(image.Rect(0, 0, cur_width, cur_height))
+    curWidth, curHeight := img.Bounds().Dx() / 2, img.Bounds().Dy() / 2
+    for min(curWidth, curHeight) > 100 {
+        layer := image.NewGray16(image.Rect(0, 0, curWidth, curHeight))
         draw.BiLinear.Scale(layer, layer.Bounds(), img, img.Bounds(), draw.Over, nil)
         pyramid = append(pyramid, layer)
-        cur_width /= 2
-        cur_height /= 2
+        curWidth /= 2
+        curHeight /= 2
     }
     return pyramid
 }
