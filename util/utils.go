@@ -90,7 +90,6 @@ func processImage(path string, resultDirPath string) error {
     rPyramid := <- rPyramidChan
     gPyramid := <- gPyramidChan
     bPyramid := <- bPyramidChan
-    fmt.Println(len(rPyramid), len(gPyramid), len(bPyramid))
 
     getBestShiftByPyramidSearchGoroutine := func(stay, shift []*image.Gray16) <-chan int{
        outChan := make(chan int)
@@ -106,12 +105,8 @@ func processImage(path string, resultDirPath string) error {
     bShiftChan := getBestShiftByPyramidSearchGoroutine(gPyramid, bPyramid)
     rXShift, rYShift := <-rShiftChan, <-rShiftChan
     bXShift, bYShift := <-bShiftChan, <-bShiftChan
-    fmt.Println(rXShift, rYShift)
-    fmt.Println(bXShift, bYShift)
-    result, err := stackLayersWithShifts(r, rXShift, rYShift, g, 0, 0, b, bXShift, bYShift)
-    if err != nil {
-        return err
-    }
+
+    result := stackLayersWithShifts(r, rXShift, rYShift, g, 0, 0, b, bXShift, bYShift)
 
     filename := filepath.Base(path)
     resultPath := filepath.Join(resultDirPath, filename)
@@ -195,23 +190,23 @@ func splitIntoLayers(img *image.Image) (*image.Gray16, *image.Gray16, *image.Gra
 
 func stackLayersWithShifts(r *image.Gray16, rXShift, rYShift int,
                            g *image.Gray16, gXShift, gYShift int,
-                           b *image.Gray16, bXShift, bYShift int) (*image.RGBA64, error) {
+                           b *image.Gray16, bXShift, bYShift int) *image.RGBA64 {
     rBoundsShifted := r.Bounds().Add(image.Pt(rXShift, rYShift))
     gBoundsShifted := g.Bounds().Add(image.Pt(gXShift, gYShift))
     bBoundsShifted := b.Bounds().Add(image.Pt(bXShift, bYShift))
     intersection := rBoundsShifted.Intersect(gBoundsShifted).Intersect(bBoundsShifted)
-    fmt.Println(intersection, intersection.Min.X, intersection.Min.Y)
     width, height := intersection.Dx(), intersection.Dy()
     result := image.NewRGBA64(image.Rect(0, 0, width, height))
     for i := intersection.Min.X; i < intersection.Max.X; i++ {
-        for j := intersection.Min.Y; j < intersection.Max.Y; j++ {
-            rC := (*r).Gray16At(i + rXShift, j + rYShift).Y
-            gC := (*g).Gray16At(i + gXShift, j + gYShift).Y
-            bC := (*b).Gray16At(i + bXShift, j + bYShift).Y
+        for j := intersection.Min.X; j < intersection.Max.Y; j++ {
+            rC := (*r).Gray16At(i - rXShift, j - rYShift).Y
+            gC := (*g).Gray16At(i - gXShift, j - gYShift).Y
+            bC := (*b).Gray16At(i - bXShift, j - bYShift).Y
             result.Set(i - intersection.Min.X, j - intersection.Min.Y, color.RGBA64{R: rC, G: gC, B: bC, A: 255})
         }
     }
-    return result, nil
+
+    return result
 }
 
 func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) (int, int) {
@@ -226,7 +221,7 @@ func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) 
             for i := 0; i < width; i++ {
                 for j := 0; j < height; j++ {
                     a := stay.Gray16At(i, j).Y
-                    b := shift.Gray16At((i + xShift + width) % width, (j + yShift + height) % height).Y
+                    b := shift.Gray16At((i - xShift + width) % width, (j - yShift + height) % height).Y
                     old := curCorrel
                     curCorrel += int64(a) * int64(b)
                     if curCorrel < old {
