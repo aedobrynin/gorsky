@@ -30,6 +30,9 @@ It supports .jpeg, .png and .tiff image formats.`,
         if len(args) < 1 {
             return errors.New("missing filename(s)\nTry " + cmd.CalledAs() + " --help for more information")
         }
+        if maxWorkers <= 0 {
+            return errors.New("workers count must be positive")
+        }
         return nil
     },
     Example: `  gorsky image.tif
@@ -51,6 +54,6 @@ func Execute() {
 }
 
 func init() {
-    rootCmd.Flags().StringVar(&outDir, "outdir", "result", "Result images will be stored in this folder")
-    rootCmd.Flags().IntVar(&maxWorkers, "maxworkers", 4, "How many images can be processed simultaneously")
+    rootCmd.Flags().StringVarP(&outDir, "outdir", "o", "result", "Result images will be stored in this folder")
+    rootCmd.Flags().IntVarP(&maxWorkers, "maxworkers", "m", 4, "How many images can be processed simultaneously")
 }
