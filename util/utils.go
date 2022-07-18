@@ -158,10 +158,10 @@ func splitIntoLayers(img *image.Image) (*image.Gray16, *image.Gray16, *image.Gra
     bounds := (*img).Bounds()
     width, height := bounds.Dx(), bounds.Dy()
 
-    const cutWidthCoeff float64 = 0.05
+    const cutWidthCoeff float64 = 0.1
     cutWidth := int(float64(width) * cutWidthCoeff)
 
-    const cutHeightCoeff float64 = 0.03
+    const cutHeightCoeff float64 = 0.1
     cutHeight := int(float64(height / 3) * cutHeightCoeff)
 
     wg := new(sync.WaitGroup)
@@ -170,22 +170,22 @@ func splitIntoLayers(img *image.Image) (*image.Gray16, *image.Gray16, *image.Gra
     b := image.NewGray16(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
     bCopyRect := image.Rect(cutWidth, cutHeight, width - cutWidth, height / 3 - cutHeight)
     go func() {
+        defer wg.Done()
         draw.Copy(b, image.Pt(0, 0), *img, bCopyRect, draw.Over, nil)
-        wg.Done()
     }()
 
     g := image.NewGray16(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
     gCopyRect := image.Rect(cutWidth, height / 3 + cutHeight, width - cutWidth, height / 3 * 2 - cutHeight)
     go func() {
+        defer wg.Done()
         draw.Copy(g, image.Pt(0, 0), *img, gCopyRect, draw.Over, nil)
-        wg.Done()
     }()
 
     r := image.NewGray16(image.Rect(0, 0, width - 2 * cutWidth, height / 3 - 2 * cutHeight))
     rCopyRect := image.Rect(cutWidth, height / 3 * 2 + cutHeight, width - cutWidth, height - cutHeight)
     go func() {
+        defer wg.Done()
         draw.Copy(r, image.Pt(0, 0), *img, rCopyRect, draw.Over, nil)
-        wg.Done()
     }()
 
     wg.Wait()
@@ -196,24 +196,19 @@ func splitIntoLayers(img *image.Image) (*image.Gray16, *image.Gray16, *image.Gra
 func stackLayersWithShifts(r *image.Gray16, rXShift, rYShift int,
                            g *image.Gray16, gXShift, gYShift int,
                            b *image.Gray16, bXShift, bYShift int) (*image.RGBA64, error) {
-    width := min(
-        r.Bounds().Dx() - abs(rXShift),
-        g.Bounds().Dx() - abs(gXShift),
-        b.Bounds().Dx() - abs(bXShift),
-    )
-    height := min(
-        r.Bounds().Dy() - abs(rYShift),
-        g.Bounds().Dy() - abs(gYShift),
-        b.Bounds().Dy() - abs(bYShift),
-    )
-
+    rBoundsShifted := r.Bounds().Add(image.Pt(rXShift, rYShift))
+    gBoundsShifted := g.Bounds().Add(image.Pt(gXShift, gYShift))
+    bBoundsShifted := b.Bounds().Add(image.Pt(bXShift, bYShift))
+    intersection := rBoundsShifted.Intersect(gBoundsShifted).Intersect(bBoundsShifted)
+    fmt.Println(intersection, intersection.Min.X, intersection.Min.Y)
+    width, height := intersection.Dx(), intersection.Dy()
     result := image.NewRGBA64(image.Rect(0, 0, width, height))
-    for i := 0; i < width; i++ {
-        for j := 0; j < height; j++ {
+    for i := intersection.Min.X; i < intersection.Max.X; i++ {
+        for j := intersection.Min.Y; j < intersection.Max.Y; j++ {
             rC := (*r).Gray16At(i + rXShift, j + rYShift).Y
             gC := (*g).Gray16At(i + gXShift, j + gYShift).Y
             bC := (*b).Gray16At(i + bXShift, j + bYShift).Y
-            result.Set(i, j, color.RGBA64{R: rC, G: gC, B: bC, A: 255})
+            result.Set(i - intersection.Min.X, j - intersection.Min.Y, color.RGBA64{R: rC, G: gC, B: bC, A: 255})
         }
     }
     return result, nil
@@ -228,11 +223,15 @@ func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) 
     for xShift := xSearchRange[0]; xShift <= xSearchRange[1]; xShift++ {
         for yShift := ySearchRange[0]; yShift <= ySearchRange[1]; yShift++ {
             var curCorrel int64 = 0
-            for i := 0; i + xShift < width; i++ {
-                for j := 0; j + yShift < height; j++ {
+            for i := 0; i < width; i++ {
+                for j := 0; j < height; j++ {
                     a := stay.Gray16At(i, j).Y
-                    b := shift.Gray16At(i + xShift, j + yShift).Y
+                    b := shift.Gray16At((i + xShift + width) % width, (j + yShift + height) % height).Y
+                    old := curCorrel
                     curCorrel += int64(a) * int64(b)
+                    if curCorrel < old {
+                        fmt.Println("overflow")
+                    }
                 }
             }
             if curCorrel > bestCorrel {
