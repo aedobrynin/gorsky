@@ -13,8 +13,6 @@ import (
     "path/filepath"
     "sync"
     "sync/atomic"
-    "math"
-    "strconv"
 )
 
 func ProcessImages(paths []string, resultDirPath string) error {
@@ -76,7 +74,25 @@ func processImage(path string, resultDirPath string) error {
 
     r, g, b := splitIntoLayers(&imgData)
 
-    shiftGoroutine := func(stay, shift *image.Gray16) <-chan int{
+    getPyramidGoroutine := func(img *image.Gray16, minLayerSize int) <-chan []*image.Gray16 {
+        outChan := make(chan []*image.Gray16)
+        go func() {
+            defer close(outChan)
+            outChan <- getPyramid(img, minLayerSize)
+        }()
+        return outChan
+    }
+
+    rPyramidChan := getPyramidGoroutine(r, 100)
+    gPyramidChan := getPyramidGoroutine(g, 100)
+    bPyramidChan := getPyramidGoroutine(b, 100)
+
+    rPyramid := <- rPyramidChan
+    gPyramid := <- gPyramidChan
+    bPyramid := <- bPyramidChan
+    fmt.Println(len(rPyramid), len(gPyramid), len(bPyramid))
+
+    getBestShiftGoroutine := func(stay, shift *image.Gray16) <-chan int{
        outChan := make(chan int)
         go func() {
             defer close(outChan)
@@ -86,11 +102,8 @@ func processImage(path string, resultDirPath string) error {
         }()
         return outChan
     }
-
-    getPyramid(r, 5)
-
-    gShiftChan := shiftGoroutine(r, g)
-    bShiftChan := shiftGoroutine(r, b)
+    gShiftChan := getBestShiftGoroutine(r, g)
+    bShiftChan := getBestShiftGoroutine(r, b)
     gXShift, gYShift := <-gShiftChan, <-gShiftChan
     bXShift, bYShift := <-bShiftChan, <-bShiftChan
     result, err := stackLayersWithShifts(r, 0, 0, g, gXShift, gYShift, b, bXShift, bYShift)
@@ -229,23 +242,16 @@ func getBestShift(stay, shift *image.Gray16) (int, int) {
     return bestXShift, bestYShift
 }
 
-func getPyramid(img *image.Gray16, maxLayers int) []*image.Gray16 {
-    exactLayers := min(int(math.Log2(float64(min(img.Bounds().Dx(), img.Bounds().Dy()))) + 1), maxLayers)
-    pyramid := make([]*image.Gray16, exactLayers, exactLayers)
-    pyramid[0] = img
+func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
+    pyramid := []*image.Gray16{img} // TODO: calculate layers count using log2
 
-    cur_width, cur_height := img.Bounds().Dx(), img.Bounds().Dy()
-    for i := 1; i < exactLayers; i++ {
-        cur_width /= 2
-        cur_height /= 2
+    cur_width, cur_height := img.Bounds().Dx() / 2, img.Bounds().Dy() / 2
+    for min(cur_width, cur_height) > 100 {
         layer := image.NewGray16(image.Rect(0, 0, cur_width, cur_height))
         draw.BiLinear.Scale(layer, layer.Bounds(), img, img.Bounds(), draw.Over, nil)
-        pyramid[i] = layer
-    }
-    for i := 0; i < exactLayers; i++ {
-        file, _ := os.Create("result/layer" + strconv.Itoa(i) + ".png")
-        png.Encode(file, pyramid[i])
-        file.Close()
+        pyramid = append(pyramid, layer)
+        cur_width /= 2
+        cur_height /= 2
     }
     return pyramid
 }
