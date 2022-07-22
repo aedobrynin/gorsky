@@ -263,7 +263,7 @@ func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
         go func(index, width, height int) {
             defer wg.Done()
             layer := image.NewGray16(image.Rect(0, 0, width, height))
-            draw.BiLinear.Scale(layer, layer.Bounds(), img, img.Bounds(), draw.Over, nil)
+            draw.NearestNeighbor.Scale(layer, layer.Bounds(), img, img.Bounds(), draw.Over, nil)
             pyramid[index] = layer
         }(i, curWidth, curHeight)
     }
