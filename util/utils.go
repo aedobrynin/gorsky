@@ -246,7 +246,7 @@ func getBestShift(stay, shift image.Gray16, xSearchRange, ySearchRange [2]int) (
 }
 
 func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
-    pyramid := []*image.Gray16{img} // TODO: calculate layers count using log2
+    pyramid := []*image.Gray16{img}
 
     curWidth, curHeight := img.Bounds().Dx() / 2, img.Bounds().Dy() / 2
     for min(curWidth, curHeight) > 100 {
