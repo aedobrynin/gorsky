@@ -217,32 +217,50 @@ b *image.Gray16, bXShift, bYShift int) *image.RGBA64 {
     return result
 }
 
+type Shift struct {
+    X, Y int
+    Correl int64
+}
+
 func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) (int, int) {
+    width, height := stay.Bounds().Dx(), stay.Bounds().Dy()
+    resChan := make(chan Shift, 100)
+
+    go func() {
+        wg := new(sync.WaitGroup)
+        for xShift := xSearchRange[0]; xShift <= xSearchRange[1]; xShift++ {
+            for yShift := ySearchRange[0]; yShift <= ySearchRange[1]; yShift++ {
+                wg.Add(1)
+                go func(xSh, ySh int) {
+                    defer wg.Done()
+                    var curCorrel int64 = 0
+                    for i := 0; i < width; i++ {
+                        for j := 0; j < height; j++ {
+                            a := stay.Gray16At(i, j).Y
+                            b := shift.Gray16At((i - xSh + width) % width, (j - ySh + height) % height).Y
+                            curCorrel += int64(a) * int64(b)
+                        }
+                    }
+                    resChan <- Shift{X: xSh, Y: ySh, Correl: curCorrel}
+                }(xShift, yShift)
+            }
+        }
+
+        wg.Wait()
+        close(resChan)
+    }()
+
     var bestCorrel int64 = 0
     var bestXShift, bestYShift int
 
-    width, height := stay.Bounds().Dx(), stay.Bounds().Dy()
-
-    for xShift := xSearchRange[0]; xShift <= xSearchRange[1]; xShift++ {
-        for yShift := ySearchRange[0]; yShift <= ySearchRange[1]; yShift++ {
-            var curCorrel int64 = 0
-            for i := 0; i < width; i++ {
-                for j := 0; j < height; j++ {
-                    a := stay.Gray16At(i, j).Y
-                    b := shift.Gray16At((i-xShift+width)%width, (j-yShift+height)%height).Y
-                    old := curCorrel
-                    curCorrel += int64(a) * int64(b)
-                    if curCorrel < old {
-                        fmt.Println("overflow")
-                    }
-                }
-            }
-            if curCorrel > bestCorrel {
-                bestCorrel = curCorrel
-                bestXShift, bestYShift = xShift, yShift
-            }
+    for sh := range resChan {
+        if sh.Correl > bestCorrel {
+            bestCorrel = sh.Correl
+            bestXShift = sh.X
+            bestYShift = sh.Y
         }
     }
+
     return bestXShift, bestYShift
 }
 
