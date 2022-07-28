@@ -79,10 +79,10 @@ func processImage(path string, resultDirPath string) error {
 		return errors.New("wrong image format")
 	}
 
-	r, g, b := splitIntoLayers(&imgData)
+	r, g, b := splitIntoLayers(imgData)
 
-	getPyramidGoroutine := func(img *image.Gray16, minLayerSize int) <-chan []*image.Gray16 {
-		outChan := make(chan []*image.Gray16)
+	getPyramidGoroutine := func(img image.Gray16, minLayerSize int) <-chan []image.Gray16 {
+		outChan := make(chan []image.Gray16)
 		go func() {
 			defer close(outChan)
 			outChan <- getPyramid(img, minLayerSize)
@@ -98,7 +98,7 @@ func processImage(path string, resultDirPath string) error {
 	gPyramid := <-gPyramidChan
 	bPyramid := <-bPyramidChan
 
-	getBestShiftByPyramidSearchGoroutine := func(stay, shift []*image.Gray16) <-chan int {
+	getBestShiftByPyramidSearchGoroutine := func(stay, shift []image.Gray16) <-chan int {
 		outChan := make(chan int)
 		go func() {
 			defer close(outChan)
@@ -125,11 +125,11 @@ func processImage(path string, resultDirPath string) error {
 
 	switch imgType {
 	case "jpeg":
-		err = jpeg.Encode(outFile, result, nil)
+		err = jpeg.Encode(outFile, &result, nil)
 	case "png":
-		err = png.Encode(outFile, result)
+		err = png.Encode(outFile, &result)
 	case "tiff":
-		err = tiff.Encode(outFile, result, nil)
+		err = tiff.Encode(outFile, &result, nil)
 	}
 	if err != nil {
 		return err
@@ -156,8 +156,8 @@ func fileExists(path string) (bool, error) {
 	}
 }
 
-func splitIntoLayers(img *image.Image) (*image.Gray16, *image.Gray16, *image.Gray16) {
-	bounds := (*img).Bounds()
+func splitIntoLayers(img image.Image) (image.Gray16, image.Gray16, image.Gray16) {
+	bounds := img.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
 
 	const cutWidthCoeff float64 = 0.1
@@ -173,31 +173,31 @@ func splitIntoLayers(img *image.Image) (*image.Gray16, *image.Gray16, *image.Gra
 	bCopyRect := image.Rect(cutWidth, cutHeight, width-cutWidth, height/3-cutHeight)
 	go func() {
 		defer wg.Done()
-		draw.Copy(b, image.Pt(0, 0), *img, bCopyRect, draw.Over, nil)
+		draw.Copy(b, image.Pt(0, 0), img, bCopyRect, draw.Over, nil)
 	}()
 
 	g := image.NewGray16(image.Rect(0, 0, width-2*cutWidth, height/3-2*cutHeight))
 	gCopyRect := image.Rect(cutWidth, height/3+cutHeight, width-cutWidth, height/3*2-cutHeight)
 	go func() {
 		defer wg.Done()
-		draw.Copy(g, image.Pt(0, 0), *img, gCopyRect, draw.Over, nil)
+		draw.Copy(g, image.Pt(0, 0), img, gCopyRect, draw.Over, nil)
 	}()
 
 	r := image.NewGray16(image.Rect(0, 0, width-2*cutWidth, height/3-2*cutHeight))
 	rCopyRect := image.Rect(cutWidth, height/3*2+cutHeight, width-cutWidth, height-cutHeight)
 	go func() {
 		defer wg.Done()
-		draw.Copy(r, image.Pt(0, 0), *img, rCopyRect, draw.Over, nil)
+		draw.Copy(r, image.Pt(0, 0), img, rCopyRect, draw.Over, nil)
 	}()
 
 	wg.Wait()
 
-	return r, g, b
+	return *r, *g, *b
 }
 
-func stackLayersWithShifts(r *image.Gray16, rXShift, rYShift int,
-	g *image.Gray16, gXShift, gYShift int,
-	b *image.Gray16, bXShift, bYShift int) *image.RGBA64 {
+func stackLayersWithShifts(r image.Gray16, rXShift, rYShift int,
+	g image.Gray16, gXShift, gYShift int,
+	b image.Gray16, bXShift, bYShift int) image.RGBA64 {
 	rBoundsShifted := r.Bounds().Add(image.Pt(rXShift, rYShift))
 	gBoundsShifted := g.Bounds().Add(image.Pt(gXShift, gYShift))
 	bBoundsShifted := b.Bounds().Add(image.Pt(bXShift, bYShift))
@@ -206,14 +206,14 @@ func stackLayersWithShifts(r *image.Gray16, rXShift, rYShift int,
 	result := image.NewRGBA64(image.Rect(0, 0, width, height))
 	for i := intersection.Min.X; i < intersection.Max.X; i++ {
 		for j := intersection.Min.X; j < intersection.Max.Y; j++ {
-			rC := (*r).Gray16At(i-rXShift, j-rYShift).Y
-			gC := (*g).Gray16At(i-gXShift, j-gYShift).Y
-			bC := (*b).Gray16At(i-bXShift, j-bYShift).Y
+			rC := r.Gray16At(i-rXShift, j-rYShift).Y
+			gC := g.Gray16At(i-gXShift, j-gYShift).Y
+			bC := b.Gray16At(i-bXShift, j-bYShift).Y
 			result.Set(i-intersection.Min.X, j-intersection.Min.Y, color.RGBA64{R: rC, G: gC, B: bC, A: 255})
 		}
 	}
 
-	return result
+	return *result
 }
 
 type Shift struct {
@@ -221,7 +221,7 @@ type Shift struct {
 	Correl int64
 }
 
-func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) (int, int) {
+func getBestShift(stay, shift image.Gray16, xSearchRange, ySearchRange [2]int) (int, int) {
 	width, height := stay.Bounds().Dx(), stay.Bounds().Dy()
 	resChan := make(chan Shift, 100)
 
@@ -263,11 +263,11 @@ func getBestShift(stay, shift *image.Gray16, xSearchRange, ySearchRange [2]int) 
 	return bestXShift, bestYShift
 }
 
-func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
+func getPyramid(img image.Gray16, minLayerSize int) []image.Gray16 {
 	curWidth, curHeight := img.Bounds().Dx(), img.Bounds().Dy()
 	layersCount := getLayersCount(curWidth, curHeight, minLayerSize)
 
-	pyramid := make([]*image.Gray16, layersCount)
+	pyramid := make([]image.Gray16, layersCount)
 	pyramid[0] = img
 
 	wg := new(sync.WaitGroup)
@@ -278,8 +278,8 @@ func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
 		go func(index, width, height int) {
 			defer wg.Done()
 			layer := image.NewGray16(image.Rect(0, 0, width, height))
-			draw.NearestNeighbor.Scale(layer, layer.Bounds(), img, img.Bounds(), draw.Over, nil)
-			pyramid[index] = layer
+			draw.NearestNeighbor.Scale(layer, layer.Bounds(), &img, img.Bounds(), draw.Over, nil)
+			pyramid[index] = *layer
 		}(i, curWidth, curHeight)
 	}
 	wg.Wait()
@@ -287,7 +287,7 @@ func getPyramid(img *image.Gray16, minLayerSize int) []*image.Gray16 {
 	return pyramid
 }
 
-func getBestShiftByPyramidSearch(stay, shift []*image.Gray16) (int, int) {
+func getBestShiftByPyramidSearch(stay, shift []image.Gray16) (int, int) {
 	xSearchRange := [2]int{-7, 7}
 	ySearchRange := [2]int{-7, 7}
 
