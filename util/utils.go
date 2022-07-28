@@ -75,8 +75,6 @@ func processImage(path string, resultDirPath string) error {
 	}
 	switch imgData.(type) {
 	case *image.Gray, *image.Gray16:
-		{
-		}
 	default:
 		return errors.New("wrong image format")
 	}
