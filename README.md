@@ -28,4 +28,7 @@ The algorithms finds the best shifts for image channels using [correlation coeff
  You can find algorithm results [here](https://bit.ly/2EIYNYq).
 
 ## How to get negatives
- To get raw photos you should take number from picture's name, for example, ```2018678848```, and put it in this link: ```https://www.loc.gov/pictures/collection/prok/item/YOUR NUMBER GOES HERE/```.
+ Visit [the collection website](https://www.loc.gov/collections/prokudin-gorskii/) to download negatives. You need an image with description `[ digital file from glass neg. ]`. The image should look like this:
+ <p align="center">
+  <img src="https://tile.loc.gov/storage-services/service/pnp/prok/00900/00924v.jpg" />
+ </p>
